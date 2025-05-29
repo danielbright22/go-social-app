@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -54,16 +55,23 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		username := r.FormValue("username")
 		email := r.FormValue("email")
-		password := r.FormValue("password")
+		rawPassword := r.FormValue("password")
 
-		if username == "" || email == "" || password == "" {
+		if username == "" || email == "" || rawPassword == "" {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 			return
 		}
 
-		_, err := db.Exec(context.Background(),
+		// Hash the password before saving
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, "Error hashing password", http.StatusInternalServerError)
+			return
+		}
+
+		_, err = db.Exec(context.Background(),
 			"INSERT INTO users (username, email, password) VALUES ($1, $2, $3)",
-			username, email, password)
+			username, email, string(hashedPassword))
 		if err != nil {
 			http.Error(w, "Error creating user (maybe already exists)", http.StatusInternalServerError)
 			return
@@ -86,7 +94,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		var dbPassword string
 		err := db.QueryRow(context.Background(),
 			"SELECT password FROM users WHERE username=$1", username).Scan(&dbPassword)
-		if err != nil || dbPassword != password {
+		if err != nil {
+			http.Error(w, "Invalid login credentials", http.StatusUnauthorized)
+			return
+		}
+
+		// Compare the hashed password
+		if err := bcrypt.CompareHashAndPassword([]byte(dbPassword), []byte(password)); err != nil {
 			http.Error(w, "Invalid login credentials", http.StatusUnauthorized)
 			return
 		}
