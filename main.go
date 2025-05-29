@@ -15,7 +15,8 @@ import (
 
 var (
 	db    *pgx.Conn
-	store = sessions.NewCookieStore([]byte("your-secret-key")) // Change in production!
+	store = sessions.NewCookieStore([]byte("kF3bKpA2nSeVLQ7Y6xJ9uGpQmZyT9XxLk8NzTq9X3Yc="))
+ // Change this in production
 )
 
 func main() {
@@ -27,9 +28,9 @@ func main() {
 
 	db, err = pgx.Connect(context.Background(), dbURL)
 	if err != nil {
-		log.Fatalf("❌ DB connection error: %v", err)
+		log.Fatalf("❌ Could not connect to DB: %v", err)
 	}
-	fmt.Println("✅ Connected to PostgreSQL!")
+	fmt.Println("✅ Connected to PostgreSQL")
 
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/register", registerHandler)
@@ -41,12 +42,12 @@ func main() {
 	if port == "" {
 		port = "10000"
 	}
-	fmt.Println("🚀 Server started on port:", port)
+	fmt.Println("🚀 Server running on port", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/register", http.StatusSeeOther)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func registerHandler(w http.ResponseWriter, r *http.Request) {
@@ -55,16 +56,16 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		username := r.FormValue("username")
 		email := r.FormValue("email")
-		rawPassword := r.FormValue("password")
+		password := r.FormValue("password")
 
-		if username == "" || email == "" || rawPassword == "" {
+		if username == "" || email == "" || password == "" {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 			return
 		}
 
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
-			http.Error(w, "Password hashing failed", http.StatusInternalServerError)
+			http.Error(w, "Error hashing password", http.StatusInternalServerError)
 			return
 		}
 
@@ -72,7 +73,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			"INSERT INTO users (username, email, password) VALUES ($1, $2, $3)",
 			username, email, string(hashedPassword))
 		if err != nil {
-			http.Error(w, "Registration failed: user may already exist", http.StatusInternalServerError)
+			http.Error(w, "Error saving user (maybe already exists)", http.StatusInternalServerError)
 			return
 		}
 
