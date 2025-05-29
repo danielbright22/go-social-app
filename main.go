@@ -15,19 +15,19 @@ import (
 
 var (
 	db    *pgx.Conn
-	store = sessions.NewCookieStore([]byte("your-secret-key")) // Change this in production!
+	store = sessions.NewCookieStore([]byte("your-secret-key")) // Change in production!
 )
 
 func main() {
 	var err error
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("❌ DATABASE_URL not set in environment variables")
+		log.Fatal("❌ DATABASE_URL not set")
 	}
 
 	db, err = pgx.Connect(context.Background(), dbURL)
 	if err != nil {
-		log.Fatalf("❌ Could not connect to DB: %v", err)
+		log.Fatalf("❌ DB connection error: %v", err)
 	}
 	fmt.Println("✅ Connected to PostgreSQL!")
 
@@ -62,10 +62,9 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Hash the password before saving
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
 		if err != nil {
-			http.Error(w, "Error hashing password", http.StatusInternalServerError)
+			http.Error(w, "Password hashing failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -73,7 +72,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			"INSERT INTO users (username, email, password) VALUES ($1, $2, $3)",
 			username, email, string(hashedPassword))
 		if err != nil {
-			http.Error(w, "Error creating user (maybe already exists)", http.StatusInternalServerError)
+			http.Error(w, "Registration failed: user may already exist", http.StatusInternalServerError)
 			return
 		}
 
@@ -99,8 +98,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Compare the hashed password
-		if err := bcrypt.CompareHashAndPassword([]byte(dbPassword), []byte(password)); err != nil {
+		err = bcrypt.CompareHashAndPassword([]byte(dbPassword), []byte(password))
+		if err != nil {
 			http.Error(w, "Invalid login credentials", http.StatusUnauthorized)
 			return
 		}
